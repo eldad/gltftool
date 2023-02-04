@@ -1,0 +1,13 @@
+[package]
+name = "gltftool"
+authors = ["Eldad Zack <eldad@fogrefinery.com>"]
+version = "0.1.0"
+edition = "2021"
+description = "GLTF CLI tool"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0.68"
+clap = { version = "4.1.4", features = ["derive"] }
+gltf = "1.1.0"
+thiserror = "1.0.38"
