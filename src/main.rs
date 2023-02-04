@@ -28,6 +28,7 @@ struct GltfInfo {
     material_names: Vec<String>,
     images_names: Vec<String>,
     meshes_names: Vec<String>,
+    texture_names: Vec<String>,
 }
 
 impl From<Gltf> for GltfInfo {
@@ -35,11 +36,13 @@ impl From<Gltf> for GltfInfo {
         let material_names: Vec<String> = gltf.materials().flat_map(|t| t.name().map(str::to_owned)).collect();
         let images_names: Vec<String> = gltf.images().flat_map(|t| t.name().map(str::to_owned)).collect();
         let meshes_names: Vec<String> = gltf.meshes().flat_map(|t| t.name().map(str::to_owned)).collect();
+        let texture_names: Vec<String> = gltf.textures().flat_map(|t| t.name().map(str::to_owned)).collect();
 
         Self {
             material_names,
             images_names,
             meshes_names,
+            texture_names,
         }
     }
 }
