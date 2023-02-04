@@ -64,14 +64,9 @@ fn show_info(gltf: Gltf) -> anyhow::Result<()> {
 }
 
 fn extract_basecolor_by_index(gltf: Gltf, texture_index: usize) -> Result<(), RuntimeError> {
-    let texture = gltf.textures().nth(texture_index).ok_or( RuntimeError::TextureIndexNotFound { texture_index })?;
+    let image_index = gltf.textures().nth(texture_index).ok_or( RuntimeError::TextureIndexNotFound { texture_index })?.index();
 
-    let output = match texture.name() {
-        Some(name) => name.to_owned(),
-        None => format!("index {texture_index}"),
-    };
-
-    println!("{output}");
+    println!("image index {image_index}");
 
     Ok(())
 }
