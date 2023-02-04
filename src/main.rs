@@ -71,11 +71,17 @@ fn show_info(gltf: Gltf) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn extract_basecolor_by_index(gltf: &Gltf, texture_index: usize) -> Result<Option<&[u8]>, RuntimeError> {
-    let texture = gltf
-        .textures()
-        .nth(texture_index)
-        .ok_or(RuntimeError::TextureIndexNotFound { texture_index })?;
+fn extract_basecolor_by_index(gltf: &Gltf, material_index: usize) -> Result<Option<&[u8]>, RuntimeError> {
+    let material = gltf
+        .materials()
+        .nth(material_index)
+        .ok_or(RuntimeError::MaterialIndexNotFound { material_index })?;
+
+    let texture = material
+        .pbr_metallic_roughness()
+        .base_color_texture()
+        .ok_or(RuntimeError::PbrMetallicRougnessBaseColorTextureNotFound { material_index })?
+        .texture();
 
     let mut bytes: Option<&[u8]> = None;
 
