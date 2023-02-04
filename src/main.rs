@@ -1,8 +1,4 @@
-use std::{
-    fs::{File, OpenOptions},
-    io::{Read, Write},
-    ptr::write_bytes,
-};
+use std::{fs::OpenOptions, io::Write};
 
 use clap::{Parser, Subcommand};
 use error::RuntimeError;
