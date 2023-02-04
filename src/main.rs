@@ -26,13 +26,21 @@ enum Action {
 #[derive(Serialize, Debug)]
 struct GltfInfo {
     material_names: Vec<String>,
+    images_names: Vec<String>,
+    meshes_names: Vec<String>,
 }
 
 impl From<Gltf> for GltfInfo {
     fn from(gltf: Gltf) -> Self {
         let material_names: Vec<String> = gltf.materials().flat_map(|t| t.name().map(str::to_owned)).collect();
+        let images_names: Vec<String> = gltf.images().flat_map(|t| t.name().map(str::to_owned)).collect();
+        let meshes_names: Vec<String> = gltf.meshes().flat_map(|t| t.name().map(str::to_owned)).collect();
 
-        Self { material_names }
+        Self {
+            material_names,
+            images_names,
+            meshes_names,
+        }
     }
 }
 
