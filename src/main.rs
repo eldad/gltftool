@@ -1,5 +1,12 @@
+use std::{
+    fs::{File, OpenOptions},
+    io::{Read, Write},
+    ptr::write_bytes,
+};
+
 use clap::{Parser, Subcommand};
 use error::RuntimeError;
+use gltf::Gltf;
 use serde::Serialize;
 
 mod error;
@@ -28,6 +35,12 @@ enum Action {
     Basecolor {
         #[arg()]
         material_name: Option<String>,
+
+        #[arg(short, long)]
+        output_filename: Option<String>,
+
+        #[arg(long)]
+        overwrite: bool,
     },
 }
 
@@ -39,8 +52,8 @@ struct GltfInfo {
     texture_names: Vec<String>,
 }
 
-impl From<gltf::Document> for GltfInfo {
-    fn from(gltf: gltf::Document) -> Self {
+impl From<Gltf> for GltfInfo {
+    fn from(gltf: Gltf) -> Self {
         let material_names: Vec<String> = gltf.materials().flat_map(|t| t.name().map(str::to_owned)).collect();
         let images_names: Vec<String> = gltf.images().flat_map(|t| t.name().map(str::to_owned)).collect();
         let meshes_names: Vec<String> = gltf.meshes().flat_map(|t| t.name().map(str::to_owned)).collect();
@@ -55,35 +68,51 @@ impl From<gltf::Document> for GltfInfo {
     }
 }
 
-fn show_info(gltf: gltf::Document) -> anyhow::Result<()> {
+fn show_info(gltf: Gltf) -> anyhow::Result<()> {
     let info: GltfInfo = gltf.into();
     let yaml = serde_yaml::to_string(&info)?;
     println!("{yaml}");
     Ok(())
 }
 
-fn extract_basecolor_by_index(gltf: gltf::Document, texture_index: usize, images: Vec<gltf::image::Data>) -> Result<(), RuntimeError> {
-    let image_index = gltf.textures().nth(texture_index).ok_or( RuntimeError::TextureIndexNotFound { texture_index })?.index();
+fn extract_basecolor_by_index(gltf: &Gltf, texture_index: usize) -> Result<Option<&[u8]>, RuntimeError> {
+    let texture = gltf
+        .textures()
+        .nth(texture_index)
+        .ok_or(RuntimeError::TextureIndexNotFound { texture_index })?;
 
-    let image = images.get(image_index).ok_or(RuntimeError::ImageIndexNotFound { image_index })?;
+    let mut bytes: Option<&[u8]> = None;
 
-    let width = image.width;
-    let height = image.height;
+    match texture.source().source() {
+        gltf::image::Source::View { view, mime_type } => {
+            let blob = gltf.blob.as_ref().ok_or(RuntimeError::NoGltfBlob)?;
 
-    println!("image: {width}x{height}");
+            let begin = view.offset();
+            let end = begin + view.length();
 
-    Ok(())
+            bytes = Some(&blob[begin..end]);
+
+            let length = end - begin;
+            println!("[{mime_type}] {length} bytes");
+        }
+        gltf::image::Source::Uri { uri, mime_type } => match mime_type {
+            Some(mime_type) => println!("[{mime_type}] {uri}"),
+            None => println!("{uri}"),
+        },
+    };
+
+    Ok(bytes)
 }
 
-fn extract_basecolor(gltf: gltf::Document, material_name: Option<String>, images: Vec<gltf::image::Data>) -> Result<(), RuntimeError> {
+fn extract_basecolor(gltf: &Gltf, material_name: Option<String>) -> Result<Option<&[u8]>, RuntimeError> {
     match (material_name, gltf.materials().len()) {
         (Some(material_name), _) => gltf
             .materials()
             .find(|m| m.name().map(|name| name == material_name).unwrap_or(false))
             .and_then(|m| m.index())
-            .map(|index| extract_basecolor_by_index(gltf, index, images))
+            .map(|index| extract_basecolor_by_index(gltf, index))
             .unwrap_or_else(|| Err(RuntimeError::MaterialNotFound { material_name })),
-        (None, 1) => extract_basecolor_by_index(gltf, 0, images),
+        (None, 1) => extract_basecolor_by_index(gltf, 0),
         (None, 2..) => Err(RuntimeError::NoMaterialNameMoreThanOneMaterial),
         (None, _) => Err(RuntimeError::NoMaterials),
     }
@@ -92,13 +121,30 @@ fn extract_basecolor(gltf: gltf::Document, material_name: Option<String>, images
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // let gltf = Gltf::open(&args.gltf_filename)?;
-
-    let (document, _buffers, images) = gltf::import(args.gltf_filename)?;
+    let gltf = Gltf::open(args.gltf_filename)?;
 
     match args.action {
-        Action::Info => show_info(document)?,
-        Action::Basecolor { material_name } => extract_basecolor(document, material_name, images)?,
+        Action::Info => show_info(gltf)?,
+        Action::Basecolor {
+            material_name,
+            output_filename,
+            overwrite,
+        } => {
+            let maybe_bytes = extract_basecolor(&gltf, material_name)?;
+
+            if let (Some(bytes), Some(filename)) = (maybe_bytes, output_filename) {
+                let mut open_options = OpenOptions::new();
+                open_options.write(true);
+                if overwrite {
+                    open_options.create(true).truncate(true)
+                } else {
+                    open_options.create_new(true)
+                };
+
+                let mut f = open_options.open(filename)?;
+                f.write_all(bytes)?;
+            };
+        }
     }
 
     Ok(())
