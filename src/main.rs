@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
+use error::RuntimeError;
 use gltf::Gltf;
 use serde::Serialize;
+
+mod error;
 
 /// gltf tool
 ///
@@ -21,6 +24,12 @@ struct Args {
 enum Action {
     /// Show info
     Info,
+
+    /// Extract basecolor texture from a Metallic-Roughness Material
+    Basecolor {
+        #[arg()]
+        material_name: Option<String>,
+    },
 }
 
 #[derive(Serialize, Debug)]
@@ -54,6 +63,33 @@ fn show_info(gltf: Gltf) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn extract_basecolor_by_index(gltf: Gltf, texture_index: usize) -> Result<(), RuntimeError> {
+    let texture = gltf.textures().nth(texture_index).ok_or( RuntimeError::TextureIndexNotFound { texture_index })?;
+
+    let output = match texture.name() {
+        Some(name) => name.to_owned(),
+        None => format!("index {texture_index}"),
+    };
+
+    println!("{output}");
+
+    Ok(())
+}
+
+fn extract_basecolor(gltf: Gltf, material_name: Option<String>) -> Result<(), RuntimeError> {
+    match (material_name, gltf.materials().len()) {
+        (Some(material_name), _) => gltf
+            .materials()
+            .find(|m| m.name().map(|name| name == material_name).unwrap_or(false))
+            .and_then(|m| m.index())
+            .map(|index| extract_basecolor_by_index(gltf, index))
+            .unwrap_or_else(|| Err(RuntimeError::MaterialNotFound { material_name })),
+        (None, 1) => extract_basecolor_by_index(gltf, 0),
+        (None, 2..) => Err(RuntimeError::NoMaterialNameMoreThanOneMaterial),
+        (None, _) => Err(RuntimeError::NoMaterials),
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
@@ -61,6 +97,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.action {
         Action::Info => show_info(gltf)?,
+        Action::Basecolor { material_name } => extract_basecolor(gltf, material_name)?,
     }
 
     Ok(())
