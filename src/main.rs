@@ -32,9 +32,7 @@ impl From<Gltf> for GltfInfo {
     fn from(gltf: Gltf) -> Self {
         let material_names: Vec<String> = gltf.materials().flat_map(|t| t.name().map(str::to_owned)).collect();
 
-        Self {
-            material_names
-        }
+        Self { material_names }
     }
 }
 
